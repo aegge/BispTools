@@ -4,8 +4,18 @@ from scipy.interpolate import interp1d
 from scipy.spatial import Delaunay
 
 class BispTreeLevel:
+    """
+    An exemplary module to compute tree-level model predictions for the galaxy bispectrum in real space.
+    """
 
     def __init__(self, fname_Plinear=None, Plinear=None):
+        """
+        Initialise BispTreeLevel object. Takes either a filename storing the linear power spectrum (two columns: k, P_lin), or an array [k, P_lin].
+
+        Args:
+            fname_Plinear (str): filename storing linear power spectrum
+            Plinear (float): numpy array with two columns corresponding to k and P_lin(k)
+        """
         self.Pspline = None
         self.neff1 = 0.
         self.neff2 = 0.
@@ -19,15 +29,30 @@ class BispTreeLevel:
             self.init_Plinear(Plinear)
 
     def init_Plinear(self, Plinear):
+        """
+        Generate spline of linear power spectrum from array.
+
+        Args:
+            Plinear (float): numpy array with two columns corresponding to k and P_lin(k)
+        """
         self.Pspline = interp1d(Plinear[:,0],Plinear[:,1],kind='cubic')
         self.compute_neff(Plinear)
 
     def init_Plinear_from_file(self, fname_Plinear):
+        """
+        Generate spline of linear power spectrum from filename.
+
+        Args:
+            fname_Plinear (str): filename storing linear power spectrum in the format k, P_lin(k)
+        """
         Plinear = np.loadtxt(fname_Plinear)
         self.Pspline = interp1d(Plinear[:,0],Plinear[:,1],kind='cubic')
         self.compute_neff(Plinear)
 
     def compute_neff(self, Plinear):
+        """
+        Compute effective spectral indices in the low-k and high-k limit of the input linear power spectrum.
+        """
         dlp = np.log10(Plinear[2,1]) - np.log10(Plinear[0,1])
         dlk = np.log10(Plinear[2,0]) - np.log10(Plinear[0,0])
         self.neff1 = dlp/dlk
@@ -40,6 +65,15 @@ class BispTreeLevel:
         self.PLmax = Plinear[-1,1]
 
     def PL(self, k):
+        """
+        Return splined linear power spectrum, extended below kmin and beyond kmax of the input power spectrum using the effective spectral indices.
+
+        Args:
+            k (float): single value or list/array of scales
+
+        Returns:
+            Linear power spectrum at scale(s) k
+        """
         if not isinstance(k,list) and not isinstance(k,np.ndarray):
             k = np.array([k])
         P = np.zeros(k.shape[0])
@@ -53,14 +87,43 @@ class BispTreeLevel:
         return P
 
     def F2(self, k1, k2, k3):
+        """
+        Return value of second-order SPT kernel F2[vec(k1),vec(k2)].
+
+        Args:
+            k1, k2 (float): magnitudes of vectors vec(k1) and vec(k2)
+            k3 (float): magnitude of vec(k1)+vec(k2)
+
+        Returns:
+            Value of F2
+        """
         mu = (k3**2 - k1**2 - k2**2)/(2*k1*k2)
         return 5./7 + mu/2*(k1/k2 + k2/k1) + 2./7*mu**2
 
     def K(self, k1, k2, k3):
+        """
+        Return value of second-order Galileon operator kernel K[vec(k1),vec(k2)].
+
+        Args:
+            k1, k2 (float): magnitudes of vectors vec(k1) and vec(k2)
+            k3 (float): magnitude of vec(k1)+vec(k2)
+
+        Returns:
+            Value of K
+        """
         mu = (k3**2 - k1**2 - k2**2)/(2*k1*k2)
         return mu**2 - 1.
 
     def B211(self, k):
+        """
+        Return tree-level galaxy bispectrum contributions.
+
+        Args:
+            k (float): list/array of three columns storing the three triangle sides for a set of configurations
+
+        Returns:
+            List of bispectrum contributions proportional to b1^3, b1^2*b2, b1^2*gamma2 for the provided list of configurations.
+        """
         if not isinstance(k,np.ndarray):
             k = np.array([k])
         elif isinstance(k,np.ndarray) and k.ndim == 1:
@@ -78,8 +141,26 @@ class BispTreeLevel:
 
 
 class BispDelaunay:
+    """
+    This module corrects bispectrum model predictions for the binning effect using (linear) Delaunay interpolation.
+    The BispDelaunay object is initialised with the scale cuts of the measurements (kmin and kmax) and their bin width.
+    These boundary values are used to define all allowed triangle configuration (excluding open triangles for the moment),
+    which are assumed to be identical with the measured configurations ("target configurations"). Each configuration is
+    decomposed into a set of tetrahedra that define the interpolation grid (resolution can be controlled via the function
+    "set_refinement_settings") and the Delaunay binning matrix is computed using the function "compute_Delaunay_matrix".
+    Further details are described in the accompanying Jupyter notebook.
+    """
 
     def __init__(self, kmin, kmax, dk, kf):
+        """
+        Initialise BispDelaunay object.
+
+        Args:
+            kmin (float): minimum scale of the measurements at the bin centre (in units of kf)
+            kmax (float): maximum scale of the measurements at the bin centre (in units of kf)
+            dk (float): bin width (in units of kf)
+            kf (float): fundamental frequency
+        """
         self.kmin = kmin
         self.kmin_ph = kmin*kf
         self.kmax = kmax
@@ -241,7 +322,15 @@ class BispDelaunay:
                 z = np.append(z, [tet.points[i, 2], tet.points[j, 2], np.nan])
             ax.plot3D(x, y, z, color=color, lw=0.5)
 
-    def plot_simplices(self,tri_indices,ax,color='C2'):
+    def plot_simplices(self, tri_indices, ax, color='C2'):
+        """
+        Plot all tetrahedra (simplices) corresponding to a given set of triangle configurations.
+
+        Args:
+            tri_indices (int): single value or list/array of triangle indices corresponding to the desired triangle configurations
+            ax: a matplotlib axes object
+            color: a matplotlib identifier for the color of the tetrahedra edges
+        """
         if not isinstance(tri_indices,list) and not isinstance(tri_indices,np.ndarray):
             tri_indices = [tri_indices]
         for tri_index in tri_indices:
